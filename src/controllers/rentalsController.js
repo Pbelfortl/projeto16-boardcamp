@@ -118,7 +118,6 @@ export async function returnGame (req, res) {
     if( delayDays > rental.daysRented){
         delayFee = (rental.originalPrice*(delayDays-rental.daysRented))-rental.originalPrice
     }
- 
 
     try{
         
