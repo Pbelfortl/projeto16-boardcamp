@@ -110,15 +110,15 @@ export async function returnGame (req, res) {
         return res.sendStatus(400)
     }
 
-    const delayFee = 0
+    let delayFee = 0
     const returnDate = dayjs().format('YYYY-MM-DD')
     const delayDays = (Math.floor(((dayjs().unix() - dayjs(rental.rentDate).unix())/86400)))
 
 
     if( delayDays > rental.daysRented){
-        delayFee = rental.delayFee*(delayDays-daysRented)
+        delayFee = (rental.originalPrice*(delayDays-rental.daysRented))-rental.originalPrice
     }
-    console.log(delayFee)
+ 
 
     try{
         
@@ -150,4 +150,18 @@ export async function deleteRent (req, res) {
     } catch (err) {
         res.sendStatus(500)
     }
+}
+
+export async function getMetrics (req, res) {
+
+    try{
+        const revenue = Number((await connection.query(`SELECT SUM("originalPrice") FROM rentals`)).rows[0].sum)
+        const fees = Number((await connection.query(`SELECT SUM("delayFee") FROM rentals`)).rows[0].sum)
+        const rentals = (await connection.query(`SELECT COUNT(id) FROM rentals`)).rows[0].count
+        const avr = (revenue+fees)/rentals
+        res.status(200).send({revenue:(revenue+fees), rentals: rentals, average: avr})
+    } catch (err) {
+        res.status(500).send(err)
+    }
+    
 }
