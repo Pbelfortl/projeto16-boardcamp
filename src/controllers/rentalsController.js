@@ -4,24 +4,24 @@ import duration from "dayjs";
 
 
 
-export async function rentGame (req, res) {
+export async function rentGame(req, res) {
 
-    const {customerId, gameId, daysRented} = req.body
+    const { customerId, gameId, daysRented } = req.body
 
     const customer = (await connection.query("SELECT * FROM customers WHERE id = $1", [customerId])).rows[0]
     const game = (await connection.query("SELECT * FROM games WHERE id=$1", [gameId])).rows[0]
 
-    if( !customer || !game || daysRented < 1 || game.stockTotal < 1){
+    if (!customer || !game || daysRented < 1 || game.stockTotal < 1) {
         return res.sendStatus(400)
     }
 
-    try{
+    try {
 
         await connection.query(`
                 INSERT INTO 
                 rentals ("customerId", "gameId","rentDate", "daysRented", "returnDate", "originalPrice", "delayFee")
                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [customerId, gameId, dayjs().format('YYYY-MM-DD'), daysRented, null, (daysRented*game.pricePerDay), null])
+            [customerId, gameId, dayjs().format('YYYY-MM-DD'), daysRented, null, (daysRented * game.pricePerDay), null])
 
         res.sendStatus(201)
     } catch (err) {
@@ -30,13 +30,15 @@ export async function rentGame (req, res) {
     }
 }
 
-export async function getRentals (req, res) {
+export async function getRentals(req, res) {
 
     const customerId = Number(req.query.customerId)
     const gameId = Number(req.query.gameId)
+    const status = req.query.status
+    const startDate = req.query.startDate
     const rentalReturn = []
 
-    try{
+    try {
         const rental = await connection.query(`SELECT 
                 rentals.id AS "rentalId", rentals."customerId", rentals."gameId", rentals."rentDate", rentals."daysRented", rentals."returnDate", rentals."originalPrice", rentals."delayFee",
                 customers.id,  customers.name,customers.phone, customers.cpf, customers.birthday,
@@ -46,24 +48,52 @@ export async function getRentals (req, res) {
                  JOIN games ON rentals."gameId" = games.id
                  JOIN categories ON games."categoryId" = categories.id`)
 
-        if(customerId){
+        if (status === 'open') {
             rental.rows.forEach(element => {
-                if (element.customerId === customerId){
+                if (element.returnDate === null) {
                     fillReturn(element)
                 }
             });
             return res.status(200).send(rentalReturn)
         }
 
-        if(gameId){
+        if (status === 'closed') {
             rental.rows.forEach(element => {
-                if (element.gameId === gameId){
+                if (element.returnDate !== null) {
                     fillReturn(element)
                 }
             });
             return res.status(200).send(rentalReturn)
         }
-        
+
+        if (startDate) {
+            rental.rows.forEach(element => {
+                if (dayjs(element.rentDate).unix() >= dayjs(startDate).unix()) {
+                    fillReturn(element)
+                }
+            });
+            return res.status(200).send(rentalReturn)
+        }
+
+
+        if (customerId) {
+            rental.rows.forEach(element => {
+                if (element.customerId === customerId) {
+                    fillReturn(element)
+                }
+            });
+            return res.status(200).send(rentalReturn)
+        }
+
+        if (gameId) {
+            rental.rows.forEach(element => {
+                if (element.gameId === gameId) {
+                    fillReturn(element)
+                }
+            });
+            return res.status(200).send(rentalReturn)
+        }
+
         rental.rows.forEach(element => {
             fillReturn(element)
         });
@@ -73,7 +103,7 @@ export async function getRentals (req, res) {
         res.status(500).send(err)
     }
 
-    function fillReturn (element) {
+    function fillReturn(element) {
         rentalReturn.push({
             id: element.rentalId,
             customerId: element.customerId,
@@ -83,44 +113,44 @@ export async function getRentals (req, res) {
             returnDate: element.returnDate,
             originalPrice: element.originalPrice,
             delayFee: element.delayFee,
-            customer:{
+            customer: {
                 id: element.customerId,
-                name:element.name,
+                name: element.name,
             },
             game: {
-                id:element.gameId,
-                name:element.gameName,
-                categoryId:element.categoryId,
-                categoryName:element.categoryName
+                id: element.gameId,
+                name: element.gameName,
+                categoryId: element.categoryId,
+                categoryName: element.categoryName
             }
         })
     }
 }
 
-export async function returnGame (req, res) {
+export async function returnGame(req, res) {
 
     const rentalId = req.params.id
     const rental = (await connection.query("SELECT * FROM rentals WHERE id=$1", [rentalId])).rows[0]
 
-    if(!rental.id){
+    if (!rental.id) {
         return res.sendStatus(404)
     }
 
-    if(rental.returnDate !== null){
+    if (rental.returnDate !== null) {
         return res.sendStatus(400)
     }
 
     let delayFee = 0
     const returnDate = dayjs().format('YYYY-MM-DD')
-    const delayDays = (Math.floor(((dayjs().unix() - dayjs(rental.rentDate).unix())/86400)))
+    const delayDays = (Math.floor(((dayjs().unix() - dayjs(rental.rentDate).unix()) / 86400)))
 
 
-    if( delayDays > rental.daysRented){
-        delayFee = (rental.originalPrice*(delayDays-rental.daysRented))-rental.originalPrice
+    if (delayDays > rental.daysRented) {
+        delayFee = (rental.originalPrice * (delayDays - rental.daysRented)) - rental.originalPrice
     }
 
-    try{
-        
+    try {
+
         await connection.query(`UPDATE rentals SET "returnDate" = $1, "delayFee" = $2 WHERE id = $3`, [returnDate, delayFee, rentalId])
         res.sendStatus(200)
 
@@ -130,17 +160,17 @@ export async function returnGame (req, res) {
     }
 }
 
-export async function deleteRent (req, res) {
+export async function deleteRent(req, res) {
 
 
     const rentalId = req.params.id
     const rental = await connection.query("SELECT * FROM rentals WHERE id = $1", [rentalId])
 
-    if(rental.rowCount === 0){
+    if (rental.rowCount === 0) {
         return res.sendStatus(404)
     }
 
-    if(rental.rows[0].returnDate === null){
+    if (rental.rows[0].returnDate === null) {
         return res.sendStatus(400)
     }
 
@@ -151,16 +181,16 @@ export async function deleteRent (req, res) {
     }
 }
 
-export async function getMetrics (req, res) {
+export async function getMetrics(req, res) {
 
-    try{
+    try {
         const revenue = Number((await connection.query(`SELECT SUM("originalPrice") FROM rentals`)).rows[0].sum)
         const fees = Number((await connection.query(`SELECT SUM("delayFee") FROM rentals`)).rows[0].sum)
         const rentals = (await connection.query(`SELECT COUNT(id) FROM rentals`)).rows[0].count
-        const avr = (revenue+fees)/rentals
-        res.status(200).send({revenue:(revenue+fees), rentals: rentals, average: avr})
+        const avr = (revenue + fees) / rentals
+        res.status(200).send({ revenue: (revenue + fees), rentals: rentals, average: avr })
     } catch (err) {
         res.status(500).send(err)
     }
-    
+
 }
