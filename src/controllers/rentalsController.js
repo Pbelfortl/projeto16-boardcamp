@@ -32,43 +32,68 @@ export async function rentGame (req, res) {
 
 export async function getRentals (req, res) {
 
+    const customerId = Number(req.query.customerId)
+    const gameId = Number(req.query.gameId)
     const rentalReturn = []
 
     try{
         const rental = await connection.query(`SELECT 
-                rentals.id, rentals."customerId", rentals."gameId", rentals."rentDate", rentals."daysRented", rentals."returnDate", rentals."originalPrice", rentals."delayFee",
+                rentals.id AS "rentalId", rentals."customerId", rentals."gameId", rentals."rentDate", rentals."daysRented", rentals."returnDate", rentals."originalPrice", rentals."delayFee",
                 customers.id,  customers.name,customers.phone, customers.cpf, customers.birthday,
-                games.id, games.name AS "gameName", games.image, games."stockTotal", games."categoryId", games."pricePerDay",
+                games.id AS game_id, games.name AS "gameName", games.image, games."stockTotal", games."categoryId", games."pricePerDay",
                 categories.id, categories.name AS "categoryName"
                  FROM rentals JOIN customers ON rentals."customerId" = customers.id 
                  JOIN games ON rentals."gameId" = games.id
                  JOIN categories ON games."categoryId" = categories.id`)
-        rental.rows.forEach(element => {
-            rentalReturn.push({
-                id: element.id,
-                customerId: element.customerId,
-                gameId: element.gameId,
-                rentDate: element.rentDate,
-                daysRented: element.daysRented,
-                returnDate: element.returnDate,
-                originalPrice: element.originalPrice,
-                delayFee: element.delayFee,
-                customer:{
-                    id: element.customerId,
-                    name:element.name,
-                },
-                game: {
-                    id:element.gameId,
-                    name:element.gameName,
-                    categoryId:element.categoryId,
-                    categoryName:element.categoryName
+
+        if(customerId){
+            rental.rows.forEach(element => {
+                if (element.customerId === customerId){
+                    fillReturn(element)
                 }
-            })
+            });
+            return res.status(200).send(rentalReturn)
+        }
+
+        if(gameId){
+            rental.rows.forEach(element => {
+                if (element.gameId === gameId){
+                    fillReturn(element)
+                }
+            });
+            return res.status(200).send(rentalReturn)
+        }
+        
+        rental.rows.forEach(element => {
+            fillReturn(element)
         });
         res.status(200).send(rentalReturn)
     } catch (err) {
         console.log(err)
         res.status(500).send(err)
+    }
+
+    function fillReturn (element) {
+        rentalReturn.push({
+            id: element.rentalId,
+            customerId: element.customerId,
+            gameId: element.gameId,
+            rentDate: element.rentDate,
+            daysRented: element.daysRented,
+            returnDate: element.returnDate,
+            originalPrice: element.originalPrice,
+            delayFee: element.delayFee,
+            customer:{
+                id: element.customerId,
+                name:element.name,
+            },
+            game: {
+                id:element.gameId,
+                name:element.gameName,
+                categoryId:element.categoryId,
+                categoryName:element.categoryName
+            }
+        })
     }
 }
 
@@ -116,7 +141,7 @@ export async function deleteRent (req, res) {
         return res.sendStatus(404)
     }
 
-    if(rental.rows[0].returnDate !== null){
+    if(rental.rows[0].returnDate === null){
         return res.sendStatus(400)
     }
 

@@ -31,10 +31,20 @@ export async function insertGame (req, res) {
 
 export async function getGames (req, res) {
 
+    const name = req.query.name
+    
     try{
+
+        if(name) {
+            const games = await connection.query(`SELECT * FROM games WHERE name ILIKE $1`, [`%${name}%`])
+            return res.status(200).send(games.rows)
+        }
+
         const games = await connection.query("SELECT * FROM games")
         res.status(200).send(games.rows)
+
     } catch (err) {
+        console.log(err)
         res.sendStatus(500)
     }
     

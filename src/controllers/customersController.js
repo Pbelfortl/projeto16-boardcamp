@@ -30,10 +30,33 @@ export async function insertCustomer (req, res) {
 }
 
 export async function getCustomers (req, res) {
+
+    const customerCpf = req.query.cpf
     
     try{
+
+        if(customerCpf) {
+           const customer = await connection.query("SELECT * FROM customers WHERE cpf ILIKE $1", [`%${customerCpf}%`])
+           return res.status(200).send(customer.rows)
+        }
+
         const customers = await connection.query("SELECT id, name, phone, cpf, TO_CHAR(birthday::date,'yyyy-mm-dd') as birthday FROM customers")
         res.status(200).send(customers.rows)
+    } catch (err) {
+        res.status(500).send(err)
+    }
+}
+
+export async function getCustomerById (req, res) {
+    const customerId = req.params.id
+
+    try{
+        const customer = await connection.query("SELECT * FROM customers WHERE id=$1", [customerId])
+        if(customer.rowCount === 0) {
+            return res.sendStatus(404)
+        }
+
+        res.status(200).send(customer.rows[0])
     } catch (err) {
         res.status(500).send(err)
     }
@@ -45,11 +68,13 @@ export async function updateCustomer (req, res) {
     const customer = req.body
 
     const customerRegistered = await connection.query("SELECT * FROM customers WHERE cpf = $1", [customer.cpf])
+    const customervalidate = await connection.query("SELECT * FROM customers WHERE id = $1", [customerId])
     const validation  = customerSchema.validate(customer)
 
-    if(customerRegistered.rows[0].cpf !== customer.cpf && customerRegistered.rowCount !== 0 ){
+    if( customerRegistered.rowCount !== 0 && customerRegistered?.rows[0].cpf !== customervalidate?.rows[0].cpf){
         return res.sendStatus(409)
     }
+
     if(validation.error){
         console.log(validation.error)
         return res.sendStatus(400)
